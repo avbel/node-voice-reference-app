@@ -1,4 +1,9 @@
-#node-voice-reference-app
+<div align="center">
+
+# Bandwidth Node Voice Reference App
+
+<a href="http://dev.bandwidth.com"><img src="https://s3.amazonaws.com/bwdemos/BW_Voice.png"/></a>
+</div>
 
   This application demonstrates how to implement voice calling for mobile devices, browsers (WebRTC), and any SIP client using the [Catapult API](http://ap.bandwidth.com/?utm_medium=social&utm_source=github&utm_campaign=dtolb&utm_content=_).
     This reference application makes creating, registering, and implementing voice calling for endpoints (mobile, web, or any SIP client) easy.
@@ -6,6 +11,8 @@
 
 You can open up the web page at the root of the deployed project for more instructions and for example of voice calling in your web browser using WebRTC.
 Current browser supported: Chrome and Opera.
+
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
 
 Uses the:
 * [Catapult Node SDK](https://github.com/bandwidthcom/node-bandwidth)
