@@ -6,7 +6,7 @@
 </div>
 
 <div align="center"> 
-### This application is deprecated, but will be updated soon!
+<b>This application is deprecated, but will be updated soon!</b>
 
   This application demonstrates how to implement voice calling for mobile devices, browsers (WebRTC), and any SIP client using the [Catapult API](http://ap.bandwidth.com/?utm_medium=social&utm_source=github&utm_campaign=dtolb&utm_content=_).
     This reference application makes creating, registering, and implementing voice calling for endpoints (mobile, web, or any SIP client) easy.
