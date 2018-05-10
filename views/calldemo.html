@@ -25,8 +25,8 @@
         <script src="static/js/respond.min.js"></script>
         <![endif]-->
 
-		<script src="//code.bandwidth.com/bandwidth{{webrtcEnv}}-0.9.1.min.js"></script>
 		<script src="static/js/jquery-2.1.4.min.js"></script>
+		<script src="static/js/jssip.min.js"></script>
 	</head>
 	<body>
     <!-- Navigation -->
@@ -134,6 +134,7 @@
         </div>
 
 		<script>
+			function onLoad() {
 			var config = {
 				authToken: "{{authToken}}" || undefined,
 				password: "{{password}}" || undefined,
@@ -142,58 +143,89 @@
 			    logLevel: "debug"
 			};
 
-			var phone;
-			phone = BWClient.createPhone(config);
-			phone.register();
-			phone.on("incomingCall",function(incomingCall){
-				if(call){//hangup any existing call
-					call.hangup();
-					call=null;
-				}
-				call = incomingCall;
-				call.on("ended",function(){
-					call = null;
-					updateUI();
-				});
-				call.on("connected",updateUI);
-				updateUI();
+			var authHeader = "X-Callsign-Token: {{authToken}}";
+
+			var callOptions = {
+				extraHeaders: [authHeader], // set auth token here (it will be passed on making calls and answering incoming call) 
+				mediaConstraints: {
+					audio: true, // only audio calls
+					video: false
+				},
+				pcConfig: {rtcpMuxPolicy: 'negotiate'} // to avoid a connection issue with Chrome 57+
+			};
+
+			var socket = new JsSIP.WebSocketInterface('wss://webrtc.registration.bandwidth.com:10443');
+
+			var bwPhone = new JsSIP.UA({
+				'uri': 'sip:{{username}}@{{domain}}', 
+				'sockets': [socket],
+				'register': false
+			});
+			bwPhone.registrator().setExtraHeaders([authHeader]); // set auth header on register
+			bwPhone.start();
+			bwPhone.on('connected', function(){
+				// connected to websocket
+				bwPhone.register(); // connect to SIP server
 			});
 
 			var call;
+
+			bwPhone.on("newRTCSession", function(data){
+				var session = data.session; 
+				if(call && !call.isEnded()){//hangup any existing call
+					call.terminate();
+					call = null;
+				}
+				call = session;
+				session.on('peerconnection', function(data) {
+					data.peerconnection.addEventListener('addstream', function(e){
+						document.getElementById("remote-audio").src = window.URL.createObjectURL(e.stream);
+					});
+				});
+				session.on('confirmed',function(){
+					var localStream = session.connection.getLocalStreams()[0];
+					var dtmfSender = session.connection.createDTMFSender(localStream.getAudioTracks()[0])
+					// redefine sendDTMF with own one (which will work with Bandwidth server right)
+					session.sendDTMF = function(tone){
+					dtmfSender.insertDTMF(tone);
+					};
+				});
+				if (session.direction === "incoming") {
+					// incoming call here
+					session.on("accepted", updateUI);
+					session.on("ended",function(){
+						call = null;
+						updateUI();
+					});
+					session.on("failed", updateUI);
+					updateUI();
+				}
+			});
+
 			updateUI();
 
 			$("#connectCall").click(function () {
 			    var dest = $("#toField").val();
-			    call = phone.call(dest, {
-			    	identity: "{{phoneNumber}}"
-			    });
-			    call.setRemoteAudioElement(document.getElementById("remote-audio"));
-			    call.on("connected", updateUI);
-			    call.on("ended", function(){
-			        call = null;
-			        updateUI();
-			    });
-			    updateUI();
+				bwPhone.call("{{phoneNumber}}", callOptions);
 			});
 
 
 			$('#answer').click(function(){
-			    call.setRemoteAudioElement(document.getElementById("remote-audio"));
-			    call.accept();
+			    call.answer(callOptions);
 			});
 			$('#reject').click(function(){
-			    call.reject();
+			    call.terminate();
 			});
 			$("#hangUp").click(function(){
-			    call.hangup();
+			    call.terminate();
 			    call = null;
 			    updateUI();
 			});
 			$("#mute").click(function(){
-			    if(call.getInfo().microphoneMuted){
+			    if(call.isMuted().audio){
 			        call.unmute();
-			    }else{
-			        call.mute();   
+			    } else {
+			        call.mute();
 			    }
 			    updateUI();
 			});
@@ -210,26 +242,25 @@
 			function updateUI(){
 				$("#wrapper").show();
 				if(call){
-					var info = call.getInfo();
-					if(info.status === "connecting"){
-					if(info.direction === "in"){
-					$("#incomingCallNumber").html(info.remoteName);
-					$("#incomingCall").show();
-					$("#callControl").hide()  
-					$("#incomingCall").show();
-				}else{
-					$("#callInfoText").html("Ringing...");
-					$("#callInfoNumber").html(info.remoteName);
-					$("#callStatus").show();                   
-				}
+					if(call.isInProgress()){
+						if(call.direction === "incoming"){
+							$("#incomingCallNumber").html(call.remote_identity.toString());
+							$("#incomingCall").show();
+							$("#callControl").hide()  
+							$("#incomingCall").show();
+						}else{
+							$("#callInfoText").html("Ringing...");
+							$("#callInfoNumber").html(call.remote_identity.toString());
+							$("#callStatus").show();
+						}
 
-				}else if(info.status === "connected"){
-					$("#callStatus").show();
-					$("#incomingCall").hide();
-					$("#callInfoText").html("In Call");
-					$("#callInfoNumber").html(info.remoteName);
-					$("#inCallButtons").show();
-				}
+					}else if(call.isEstablished()){
+						$("#callStatus").show();
+						$("#incomingCall").hide();
+						$("#callInfoText").html("In Call");
+						$("#callInfoNumber").html(call.remote_identity.toString());
+						$("#inCallButtons").show();
+					}
 					$("#callControl").hide();
 				}else{
 					$("#incomingCall").hide();
@@ -238,7 +269,7 @@
 					$("#inCallButtons").hide();
 				}
 				//microphone mute icon
-				if(call && call.getInfo().microphoneMuted){
+				if(call && call.isMuted().audio){
 					$("#muteIcon").addClass("fa-microphone-slash");
 					$("#muteIcon").removeClass("fa-microphone");
 				}else{
@@ -246,6 +277,8 @@
 					$("#muteIcon").addClass("fa-microphone");
 				}
 			}
+			}
+			$(document).ready(onLoad);
 		</script>
 	</body>
 </html>
