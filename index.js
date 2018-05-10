@@ -273,8 +273,9 @@ server.route({
 		// Give user random password
 		var user = {
 			userName: req.payload.userName,
-			password: (Math.random() + 1).toString(36).substring(7)
+			password: randomstring.generate(9)
 		};
+		console.log(user);
 		getOrCreateUser(user, getBaseUrl(req))
 			.then(function(endPointuser) {
 				console.log("USER:", endPointuser);
